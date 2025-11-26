@@ -1,3 +1,10 @@
 __pycache__/
 *.pyc
 venv/
+app.db
+test.db
+instance/app.db
+*.db
+*.log
+.env
+*.env
