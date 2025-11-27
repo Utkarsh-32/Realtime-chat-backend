@@ -65,7 +65,7 @@ async def refresh(
         raise HTTPException(401, "Missing token")
     token = token.split(" ")[1]
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]) #type: ignore
         user_id = payload.get("user_id")
         token_type = payload.get("type")
     except (InvalidTokenError, ExpiredSignatureError):
