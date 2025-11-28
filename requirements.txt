@@ -11,6 +11,7 @@ cryptography==46.0.3
 fastapi==0.121.2
 greenlet==3.2.4
 h11==0.16.0
+httptools==0.7.1
 idna==3.11
 Mako==1.3.10
 MarkupSafe==3.0.3
@@ -22,6 +23,7 @@ pydantic_core==2.41.5
 PyJWT==2.10.1
 python-dotenv==1.2.1
 python-multipart==0.0.20
+PyYAML==6.0.3
 redis==7.0.1
 sniffio==1.3.1
 SQLAlchemy==2.0.44
@@ -29,3 +31,6 @@ starlette==0.49.3
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.38.0
+uvloop==0.22.1
+watchfiles==1.1.1
+websockets==15.0.1

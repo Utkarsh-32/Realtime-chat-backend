@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import users, auth, messages
+from app.routers import users, auth, messages, ws
 from app.redis_client import get_redis, init_redis
 from fastapi import Depends
 from contextlib import asynccontextmanager
@@ -15,6 +15,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(messages.router)
+app.include_router(ws.router)
 
 @app.get("/redis-test")
 async def redis_test(redis= Depends(get_redis)):
