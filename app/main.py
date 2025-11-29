@@ -1,14 +1,31 @@
 from fastapi import FastAPI
 from app.routers import users, auth, messages, ws
-from app.redis_client import get_redis, init_redis
+from app.redis_client import get_redis, init_redis, close_redis
 from fastapi import Depends
 from contextlib import asynccontextmanager
+import os
+from app.redis_subscriber import start_redis_listener
+import asyncio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_redis(app)
-    yield
-    await app.state.redis.aclose()
+    await init_redis(app,
+               host=os.getenv('REDIS_HOST', 'localhost'),
+               port=os.getenv("REDIS_PORT", 6379), #type: ignore
+               db=os.getenv("REDIS_DB", 0)) #type: ignore
+    redis = app.state.redis
+    app.state.redis_task = await start_redis_listener(redis)
+    try:
+        yield
+    finally:
+        task = getattr(app.state, "redis_task", None)
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        await close_redis(app)
 
 app = FastAPI(lifespan=lifespan)
 
