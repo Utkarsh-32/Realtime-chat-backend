@@ -1,6 +1,5 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, func, Enum
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, func
 from app.database import Base
-from datetime import datetime, timezone
 from sqlalchemy.orm import relationship
 
 class User(Base):
@@ -21,7 +20,7 @@ class Messages(Base):
     recipient_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     message = Column(Text, nullable=False)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    status = Column(Enum("pending", "delivered", "read", name="message_status"), default="pending")
+    status = Column(String, default="pending")
 
     author = relationship("User", foreign_keys=[author_id])
     recipient = relationship("User", foreign_keys=[recipient_id])

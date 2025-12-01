@@ -6,15 +6,13 @@ from contextlib import asynccontextmanager
 import os
 from app.redis_subscriber import start_redis_listener
 import asyncio
+from app.routers.ws import CHAT_CHANNEL, READ_CHANNEL, PRESENCE_CHANNEL
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_redis(app,
-               host=os.getenv('REDIS_HOST', 'localhost'),
-               port=os.getenv("REDIS_PORT", 6379), #type: ignore
-               db=os.getenv("REDIS_DB", 0)) #type: ignore
+    await init_redis(app) #type: ignore
     redis = app.state.redis
-    app.state.redis_task = await start_redis_listener(redis)
+    app.state.redis_task = await start_redis_listener(redis, channels=(CHAT_CHANNEL, PRESENCE_CHANNEL, READ_CHANNEL))
     try:
         yield
     finally:
@@ -25,7 +23,7 @@ async def lifespan(app: FastAPI):
                 await task
             except asyncio.CancelledError:
                 pass
-        await close_redis(app)
+        await close_redis(app) #type: ignore
 
 app = FastAPI(lifespan=lifespan)
 

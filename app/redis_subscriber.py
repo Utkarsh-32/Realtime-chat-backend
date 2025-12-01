@@ -1,11 +1,9 @@
 import json
 from app.routers.ws import manager
-from app.redis_client import get_redis
 import asyncio
 from typing import Any
 from redis.asyncio.client import Redis
-
-STOP = object()
+from app.routers.ws import CHAT_CHANNEL, READ_CHANNEL, PRESENCE_CHANNEL
 
 async def _handle_pub_messages(msg: dict[str, Any]):
     typ = msg.get("type")
@@ -17,6 +15,10 @@ async def _handle_pub_messages(msg: dict[str, Any]):
         user_id = msg.get("user_id")
         if user_id:
             await manager._broadcast_except(user_id, msg)
+    elif typ == "read_receipt":
+        author_id = msg.get("author_id")
+        if author_id and manager.is_online(author_id):
+            await manager.send_json_to(author_id, msg)
 
 async def _subscriber_loop(redis: Redis, channels: list[str]):
     pubsub = redis.pubsub()
@@ -58,7 +60,7 @@ async def _subscriber_loop(redis: Redis, channels: list[str]):
 async def start_redis_listener(
         redis: Redis, 
         *, 
-        channels: tuple[str, ...] = ("chat_messages", "presence")
+        channels: tuple[str, ...] = (CHAT_CHANNEL, PRESENCE_CHANNEL, READ_CHANNEL)
         ) -> asyncio.Task:
     loop = asyncio.get_running_loop()
     task = loop.create_task(_subscriber_loop(redis, list(channels)))

@@ -1,13 +1,26 @@
 import redis.asyncio as aioredis
 from typing import AsyncIterator
 from fastapi import Depends, FastAPI
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 redis_client: aioredis.Redis | None
 
-async def init_redis(app: FastAPI, *, host: str = "localhost", port: int = 6379, db: int = 0):
+host = os.getenv("REDIS_HOST", "localhost")
+port = int(os.getenv("REDIS_PORT", 6379))
+db = int(os.getenv("REDIS_DB", 0))
+
+async def init_redis(app: FastAPI):
     global redis_client
 
     redis_client = aioredis.Redis(host=host, port=port, db=db)
+    try:
+        redis_client.ping()
+    except Exception:
+        raise RuntimeError("Redis is unavailable during startup")
+
     app.state.redis = redis_client
 
 async def close_redis(app: FastAPI):

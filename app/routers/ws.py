@@ -1,16 +1,20 @@
-from fastapi import (APIRouter, WebSocket, WebSocketDisconnect, Depends, 
-        HTTPException, status)
-from app.auth import get_current_user
+from fastapi import (APIRouter, WebSocket, WebSocketDisconnect, status)
 from app.database import get_db
-from typing import Dict, Any
+from typing import Dict
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
 from datetime import datetime, timezone
 from app.auth import SECRET_KEY, ALGORITHM
 from sqlalchemy import select
 from app.models import User, Messages
+import json
+from app.utils.rate_limit import check_rate_limit
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
+
+CHAT_CHANNEL = "chat_messages"
+PRESENCE_CHANNEL = "presence"
+READ_CHANNEL = "read_receipt"
 
 class ConnectionManager:
     def __init__(self):
@@ -18,30 +22,23 @@ class ConnectionManager:
     
     async def connect(self, user_id: int, websocket: WebSocket):
         await websocket.accept()
+        redis = websocket.app.state.redis
         self.active[user_id] = websocket
         payload = {
             "type": "presence",
             "user_id": user_id,
             "presence_status": "online",
         }
-        await self._broadcast_except(user_id, payload)
+        await redis.publish(PRESENCE_CHANNEL, json.dumps(payload))
     
-    async def disconnect(self, user_id: int, last_seen_iso: str | None = None):
-        self.active.pop(user_id, None)
-        payload = {
-            "type": "presence",
-            "user_id": user_id,
-            "presence_status": "offline",
-            "last_seen": last_seen_iso,
-        }
-        await self._broadcast_except(user_id, payload)
-        
+    async def disconnect(self, user_id: int):
+        self.active.pop(user_id, None)   
     
     def is_online(self, user_id: int) -> bool:
         return user_id in self.active
     
     async def send_json_to(self, user_id: int, payload: dict):
-        ws = self.active[user_id]
+        ws = self.active.get(user_id)
         if not ws:
             return
         try:
@@ -90,6 +87,7 @@ async def _send_pending_messages(user_id: int):
                 "type": "message",
                 "message_id": msg.id,
                 "author_id": msg.author_id,
+                "recipient_id": msg.recipient_id,
                 "message": msg.message,
                 "timestamp": msg.timestamp.isoformat(),
                 "status": "delivered",
@@ -102,6 +100,7 @@ async def _send_pending_messages(user_id: int):
 
 @router.websocket("/chat")
 async def websocket_chat(websocket: WebSocket):
+    redis = websocket.app.state.redis
     token = websocket.query_params.get("token")
     
     if not token:
@@ -127,6 +126,8 @@ async def websocket_chat(websocket: WebSocket):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
     
+    await manager.connect(user_id, websocket)
+    
     gen = get_db()
     try:
         db = await gen.__anext__()
@@ -136,11 +137,8 @@ async def websocket_chat(websocket: WebSocket):
             user.presence_status = "online" #type: ignore
             db.add(user)
             await db.commit()
-            await db.refresh(user)
     finally:
         await gen.aclose() #type: ignore
-    
-    await manager.connect(user_id, websocket)
 
     try:
         await _send_pending_messages(user_id)
@@ -148,10 +146,20 @@ async def websocket_chat(websocket: WebSocket):
             data = await websocket.receive_json()
             if data.get("type") == "message":
                 recipient_id = int(data.get("recipient_id"))
+                if not recipient_id:
+                    await websocket.send_json({"type":"error", "reason":"recipient id not provided"})
+                    continue
                 text = data.get("message", '').strip()
                 if not text:
                     await websocket.send_json({"type":"error", "reason":"empty message"})
                     continue
+                
+                rl_key = f"rl:{user_id}:send_message"
+                allowed = await check_rate_limit(redis=redis, key=rl_key, limit=20, window_seconds=60)
+                if not allowed:
+                    await websocket.send_json({"type":"error", "reason":"rate limit exceeded"})
+                    continue
+
                 gen = get_db()
                 try:
                     db = await gen.__anext__()
@@ -161,32 +169,35 @@ async def websocket_chat(websocket: WebSocket):
                         message=text,
                         status="pending"
                     )
+
                     db.add(msg)
                     await db.flush()
                     message_id = msg.id
 
-                    if manager.is_online(recipient_id):
-                        forward_payload = {
+                    is_online = manager.is_online(recipient_id)
+                    forward_payload = {
                             "type": "message",
                             "message_id": msg.id,
                             "author_id": user_id,
+                            "recipient_id": recipient_id,
                             "message": text,
                             "timestamp": msg.timestamp.isoformat(),
-                            "status": "delivered"
-                        }
-                        await manager.send_json_to(recipient_id, forward_payload)
-                        msg.status = "delivered" #type: ignore
-                    
+                            "status": "delivered" if is_online else "pending"
+                    }
+                    await redis.publish(CHAT_CHANNEL, json.dumps(forward_payload))
+
                     await db.commit()
-                
                 finally:
                     await gen.aclose() #type: ignore
 
-                ack = {"type":"ack", "message_id": message_id, "status": msg.status}
+                ack = {"type":"ack", "message_id": message_id, "status": forward_payload.get("status", "pending")}
                 await websocket.send_json(ack)
             
             elif data.get("type") == "read":
                 mid = int(data.get("message_id"))
+                if not mid:
+                    await websocket.send_json({"type":"error", "reason":"message_id not provided"})
+                    continue
                 gen = get_db()
                 try:
                     db = await gen.__anext__()
@@ -194,13 +205,18 @@ async def websocket_chat(websocket: WebSocket):
                     m = result.scalar_one_or_none()
                     if m and m.recipient_id == user_id and m.status != "read": #type: ignore
                         m.status = "read" #type: ignore
+                        db.add(m)
                         await db.commit()
-                        if manager.is_online(m.author_id): #type: ignore
-                            await manager.send_json_to(m.author_id, { #type: ignore
-                                "type": "read_reciept",
-                                "message_id": m.id,
-                                "user_id": user_id
-                            }) 
+                        author_id = m.author_id
+                        try:
+                            await redis.publish(READ_CHANNEL, json.dumps({
+                                    "type": "read_receipt",
+                                    "message_id": m.id,
+                                    "reader_id": user_id,
+                                    "author_id": author_id
+                                }))
+                        except Exception:
+                            await manager.disconnect(int(author_id)) #type: ignore
                 finally:
                     await gen.aclose() #type: ignore
 
@@ -218,13 +234,19 @@ async def websocket_chat(websocket: WebSocket):
                 user.last_seen = datetime.now(timezone.utc) #type: ignore
                 db.add(user)
                 await db.commit()
-                await db.refresh(user)
                 last_seen_iso = user.last_seen.isoformat()
             else:
                 last_seen_iso = None
         finally:
             await gen.aclose() #type: ignore
-        await manager.disconnect(user_id, last_seen_iso)
+        
+        await redis.publish(PRESENCE_CHANNEL, json.dumps({
+            "type":"presence",
+            "user_id": user_id,
+            "presence_status": "offline",
+            "last_seen_iso": last_seen_iso
+        }))
+        await manager.disconnect(user_id)
     
     except Exception:
         await manager.disconnect(user_id)

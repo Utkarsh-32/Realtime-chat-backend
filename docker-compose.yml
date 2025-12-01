@@ -1,0 +1,41 @@
+services:
+  app:
+    build: .
+    container_name: chat_app
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/chatdb"
+      DATABASE_URL_SYNC: "postgresql://postgres:postgres@db:5432/chatdb"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+    volumes:
+      - .:/app
+    restart: always
+  
+  db:
+    image: postgres:15
+    container_name: chat_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: chatdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:7
+    container_name: chat_redis
+    ports:
+     - "6379:6379"
+    restart: always
+  
+volumes:
+  postgres_data:
