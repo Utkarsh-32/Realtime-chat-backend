@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.redis_client import close_redis, get_redis, init_redis
 from app.redis_subscriber import start_redis_listener
-from app.routers import auth, messages, users, ws, uploads
+from app.routers import auth, messages, uploads, users, ws
 from app.routers.ws import CHAT_CHANNEL, PRESENCE_CHANNEL, READ_CHANNEL
 
 

@@ -1,10 +1,12 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
 import os
 import uuid
+
+from fastapi import APIRouter, File, HTTPException, UploadFile
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
 UPLOAD_DIR = "media"
+
 
 @router.post("/image")
 async def upload_image(file: UploadFile = File(...)):
@@ -13,10 +15,10 @@ async def upload_image(file: UploadFile = File(...)):
 
     if file.filename is None:
         raise HTTPException(400, "Filename missing")
-    
+
     if file.content_type not in ["image/jpeg", "image/png"]:
         raise HTTPException(400, "Only JPG and PNG allowed")
-    
+
     ext = file.filename.split(".")[-1]
     new_name = f"{uuid.uuid4()}.{ext}"
 
@@ -25,8 +27,5 @@ async def upload_image(file: UploadFile = File(...)):
     with open(save_path, "wb") as f:
         content = await file.read()
         f.write(content)
-    
-    return {
-        "filename": new_name,
-        "url": f"/media/{new_name}"
-    }
+
+    return {"filename": new_name, "url": f"/media/{new_name}"}
