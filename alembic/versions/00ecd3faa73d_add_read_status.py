@@ -5,15 +5,16 @@ Revises: 3fe06f7b84db
 Create Date: 2025-11-29 16:00:39.402996
 
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '00ecd3faa73d'
-down_revision: Union[str, Sequence[str], None] = '3fe06f7b84db'
+revision: str = "00ecd3faa73d"
+down_revision: Union[str, Sequence[str], None] = "3fe06f7b84db"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

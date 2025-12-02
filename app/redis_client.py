@@ -1,16 +1,18 @@
-import redis.asyncio as aioredis
-from typing import AsyncIterator
-from fastapi import Depends, FastAPI
 import os
+from typing import AsyncIterator
+
+import redis.asyncio as aioredis
 from dotenv import load_dotenv
+from fastapi import FastAPI
 
 load_dotenv()
 
-redis_client: aioredis.Redis | None
+redis_client: aioredis.Redis | None = None
 
 host = os.getenv("REDIS_HOST", "localhost")
 port = int(os.getenv("REDIS_PORT", 6379))
 db = int(os.getenv("REDIS_DB", 0))
+
 
 async def init_redis(app: FastAPI):
     global redis_client
@@ -23,6 +25,7 @@ async def init_redis(app: FastAPI):
 
     app.state.redis = redis_client
 
+
 async def close_redis(app: FastAPI):
     global redis_client
     if redis_client:
@@ -34,5 +37,6 @@ async def close_redis(app: FastAPI):
         redis_client = None
         app.state.redis = None
 
+
 async def get_redis() -> AsyncIterator[aioredis.Redis]:
-    yield redis_client #type: ignore
+    yield redis_client  # type: ignore

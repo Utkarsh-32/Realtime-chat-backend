@@ -1,6 +1,8 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, func
-from app.database import Base
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
+
+from app.database import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -11,6 +13,7 @@ class User(Base):
     password = Column(String, nullable=False)
     presence_status = Column(String, default="offline")
     last_seen = Column(DateTime(timezone=True))
+
 
 class Messages(Base):
     __tablename__ = "messages"
