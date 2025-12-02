@@ -8,5 +8,6 @@ instance/app.db
 *.log
 .env
 *.env
-uploads/
 .DS_store
+media/*
+!media/.gitkeep

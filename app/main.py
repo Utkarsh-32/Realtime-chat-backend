@@ -2,10 +2,11 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.redis_client import close_redis, get_redis, init_redis
 from app.redis_subscriber import start_redis_listener
-from app.routers import auth, messages, users, ws
+from app.routers import auth, messages, users, ws, uploads
 from app.routers.ws import CHAT_CHANNEL, PRESENCE_CHANNEL, READ_CHANNEL
 
 
@@ -29,10 +30,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+app.mount("/media", StaticFiles(directory="media"), name="media")
+
 app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(messages.router)
 app.include_router(ws.router)
+app.include_router(uploads.router)
 
 
 @app.get("/redis-test")
