@@ -175,6 +175,7 @@ async def websocket_chat(websocket: WebSocket):
         logger.warning("Invalid or Expired token", exc_info=True)
         return
     await websocket.accept(subprotocol=token)
+    logger.info(f"websocket connected for user: {user_id}")
 
     user, _db = await fetch_user_from_db(user_id)
     if not user:
