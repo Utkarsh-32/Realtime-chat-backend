@@ -154,7 +154,6 @@ async def send_unread_group_messages(user_id: int, websocket: WebSocket):
 async def websocket_chat(websocket: WebSocket):
     redis = websocket.app.state.redis
     token = websocket.headers.get("sec-websocket-protocol")
-    await websocket.accept(subprotocol=token)
 
     if not token:
         await websocket.accept()
@@ -175,6 +174,7 @@ async def websocket_chat(websocket: WebSocket):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         logger.warning("Invalid or Expired token", exc_info=True)
         return
+    await websocket.accept(subprotocol=token)
 
     user, _db = await fetch_user_from_db(user_id)
     if not user:
