@@ -8,8 +8,14 @@ from sqlalchemy.orm import declarative_base
 
 load_dotenv()
 
+TESTING = os.getenv("TESTING") == "1"
+
 logger = logging.getLogger(__name__)
-DATABASE_URL = os.getenv("DATABASE_URL")
+
+if TESTING:
+    DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+else:
+    DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
     logger.error("DATABASE_URL not found", exc_info=True)

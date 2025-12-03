@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 # isort: off
 os.environ["TESTING"] = "1"  # noqa: E402
 # isort: on
-from app.database import Base, get_db
-from app.main import app
+
+from app.database import Base, get_db  # noqa: E402
+from app.main import app  # noqa: E402
 
 TEST_DB_URL = "sqlite+aiosqlite:///./test.db"
 
