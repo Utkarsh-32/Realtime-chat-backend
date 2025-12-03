@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.auth_service import ALGORITHM, SECRET_KEY
 from app.database import get_db
-from app.models import Messages, User
+from app.models import GroupMember, GroupMessage, Messages, User
 from app.utils.rate_limit import check_rate_limit
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
@@ -49,7 +49,7 @@ class ConnectionManager:
         except Exception:
             self.active.pop(user_id, None)
 
-    async def _broadcast_except(self, except_user_id: int, payload: dict):
+    async def broadcast_except(self, except_user_id: int, payload: dict):
         to_remove = []
         for uid, ws in list(self.active.items()):
             if uid == except_user_id:
@@ -66,7 +66,7 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-async def _fetch_user_from_db(user_id: int):
+async def fetch_user_from_db(user_id: int):
     gen = get_db()
     try:
         db = await gen.__anext__()
@@ -79,7 +79,7 @@ async def _fetch_user_from_db(user_id: int):
         await gen.aclose()  # type: ignore
 
 
-async def _send_pending_messages(user_id: int):
+async def send_pending_messages(user_id: int):
     gen = get_db()
     try:
         db = await gen.__anext__()
@@ -96,9 +96,53 @@ async def _send_pending_messages(user_id: int):
                 "message": msg.message,
                 "timestamp": msg.timestamp.isoformat(),
                 "status": "delivered",
+                "image_url": msg.image_url or None,
             }
             if manager.is_online(user_id):
                 await manager.send_json_to(user_id, payload)
+        await db.commit()
+    finally:
+        await gen.aclose()  # type: ignore
+
+
+async def send_unread_group_messages(user_id: int, websocket: WebSocket):
+    gen = get_db()
+    try:
+        db = await gen.__anext__()
+        result = await db.execute(
+            select(GroupMember.group_id, GroupMember.last_read_message_id).where(GroupMember.user_id == user_id)
+        )
+        row = result.all()
+
+        for grp_id, last_read in row:
+            last_read = last_read or 0
+            result = await db.execute(
+                select(GroupMessage)
+                .where(GroupMessage.group_id == grp_id, GroupMessage.id > last_read)
+                .order_by(GroupMessage.id.asc())
+            )
+            unread_msgs = result.scalars().all()
+            if not unread_msgs:
+                continue
+            for msg in unread_msgs:
+                await websocket.send_json(
+                    {
+                        "type": "group_message",
+                        "group_id": grp_id,
+                        "message_id": msg.id,
+                        "author_id": msg.author_id,
+                        "message": msg.message,
+                        "timestamp": msg.timestamp.isoformat(),
+                        "status": "delivered",
+                        "image_url": msg.image_url or None,
+                    }
+                )
+            new_last = unread_msgs[-1].id
+            await db.execute(
+                GroupMember.__table__.update()
+                .where(GroupMember.user_id == user_id, GroupMember.group_id == grp_id)
+                .values(last_read_message_id=new_last)
+            )
         await db.commit()
     finally:
         await gen.aclose()  # type: ignore
@@ -126,7 +170,7 @@ async def websocket_chat(websocket: WebSocket):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    user, _db = await _fetch_user_from_db(user_id)
+    user, _db = await fetch_user_from_db(user_id)
     if not user:
         await websocket.accept()
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
@@ -147,7 +191,8 @@ async def websocket_chat(websocket: WebSocket):
         await gen.aclose()  # type: ignore
 
     try:
-        await _send_pending_messages(user_id)
+        await send_pending_messages(user_id)
+        await send_unread_group_messages(user_id, websocket)
         while True:
             data = await websocket.receive_json()
             if data.get("type") == "message":
@@ -156,7 +201,8 @@ async def websocket_chat(websocket: WebSocket):
                     await websocket.send_json({"type": "error", "reason": "recipient id not provided"})
                     continue
                 text = data.get("message", "").strip()
-                if not text:
+                image_url = data.get("image_url", None)
+                if not image_url and not text:
                     await websocket.send_json({"type": "error", "reason": "empty message"})
                     continue
 
@@ -169,7 +215,13 @@ async def websocket_chat(websocket: WebSocket):
                 gen = get_db()
                 try:
                     db = await gen.__anext__()
-                    msg = Messages(author_id=user_id, recipient_id=recipient_id, message=text, status="pending")
+                    msg = Messages(
+                        author_id=user_id,
+                        recipient_id=recipient_id,
+                        message=text,
+                        status="pending",
+                        image_url=image_url,
+                    )
 
                     db.add(msg)
                     await db.flush()
@@ -181,9 +233,10 @@ async def websocket_chat(websocket: WebSocket):
                         "message_id": msg.id,
                         "author_id": user_id,
                         "recipient_id": recipient_id,
-                        "message": text,
+                        "message": text or None,
                         "timestamp": msg.timestamp.isoformat(),
                         "status": "delivered" if is_online else "pending",
+                        "image_url": image_url or None,
                     }
                     await redis.publish(CHAT_CHANNEL, json.dumps(forward_payload))
 
@@ -223,6 +276,88 @@ async def websocket_chat(websocket: WebSocket):
                             )
                         except Exception:
                             await manager.disconnect(int(author_id))  # type: ignore
+                finally:
+                    await gen.aclose()  # type: ignore
+
+            elif data.get("type") == "group_message":
+                group_id = int(data.get("group_id"))
+                text = data.get("message")
+                image_url = data.get("image_url")
+                if not group_id:
+                    await websocket.send_json({"type": "error", "reason": "group id not found"})
+                    continue
+                if not text and not image_url:
+                    await websocket.send_json({"type": "error", "reason": "empty message"})
+                    continue
+                author_id = user_id
+                allowed = await check_rate_limit(redis, f"rl:{user_id}:group_message", limit=30, window_seconds=60)
+                if not allowed:
+                    await websocket.send_json({"type": "error", "reason": "rate limit exceeded"})
+                    continue
+                gen = get_db()
+                try:
+                    db = await gen.__anext__()
+                    result = await db.execute(
+                        select(GroupMember).where(GroupMember.user_id == author_id, GroupMember.group_id == group_id)
+                    )
+                    member = result.scalar_one_or_none()
+                    if not member:
+                        await websocket.send_json({"type": "error", "reason": "user is not a member of the group"})
+                        continue
+                    group_msg = GroupMessage(group_id=group_id, author_id=author_id, message=text, image_url=image_url)
+                    db.add(group_msg)
+                    await db.commit()
+                    await db.refresh(group_msg)
+                    group_msg_id = group_msg.id
+
+                    payload = {
+                        "type": "group_message",
+                        "group_id": group_id,
+                        "author_id": author_id,
+                        "message_id": group_msg_id,
+                        "message": text or None,
+                        "timestamp": group_msg.timestamp.isoformat(),
+                        "status": "pending",
+                        "image_url": image_url or None,
+                    }
+
+                    await redis.publish(f"group:{group_id}", json.dumps(payload))
+
+                    await websocket.send_json({"type": "ack", "message_id": group_msg.id, "status": "pending"})
+                except Exception:
+                    await manager.disconnect(author_id)
+                finally:
+                    await gen.aclose()  # type: ignore
+
+            elif data.get("type") == "group_read":
+                group_id = int(data.get("group_id"))
+                if not group_id:
+                    await websocket.send_json({"type": "error", "reason": "group_id not provided"})
+                    continue
+                last_id = int(data.get("message_id") or 0)
+
+                gen = get_db()
+                try:
+                    db = await gen.__anext__()
+                    result = await db.execute(
+                        select(GroupMessage.author_id).where(
+                            GroupMessage.group_id == group_id, GroupMessage.id == last_id
+                        )
+                    )
+                    author = result.scalar_one_or_none()
+                    if author == user_id:
+                        await websocket.send_json(
+                            {"type": "error", "reason": "Authors cannot mark their own messages as read."}
+                        )
+                        continue
+                    result = await db.execute(
+                        GroupMember.__table__.update()
+                        .where((GroupMember.group_id == group_id) & (GroupMember.user_id == user_id))
+                        .values(last_read_message_id=last_id)
+                    )
+                    await db.commit()
+                    payload = {"type": "group_read", "group_id": group_id, "user_id": user_id, "message_id": last_id}
+                    await redis.publish(f"group:{group_id}", json.dumps(payload))
                 finally:
                     await gen.aclose()  # type: ignore
 

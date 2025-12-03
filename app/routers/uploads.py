@@ -1,7 +1,9 @@
 import os
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+
+from app.auth_service import get_current_user
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
@@ -9,7 +11,9 @@ UPLOAD_DIR = "media"
 
 
 @router.post("/image")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_image(file: UploadFile = File(...), user=Depends(get_current_user)):
+    if not user:
+        raise HTTPException(401, "Not allowed")
     if not file:
         raise HTTPException(400, "No file uploaded")
 

@@ -1,13 +1,11 @@
 import os
 from logging.config import fileConfig
 
-from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+from app import models  # noqa: F401
 from app.database import Base
-
-load_dotenv()
 
 db_url = os.getenv("DATABASE_URL_SYNC")
 # this is the Alembic Config object, which provides
