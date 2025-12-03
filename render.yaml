@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: Realtime-chat-backend
+    env: docker
+    plan: free
+    buildCommand: "docker build -t app ."
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_SYNC
+        sync: false
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_DB
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: ALGORITHM
+        sync: false
+    
+    postdeploy:
+      - "alembic upgrade head"
