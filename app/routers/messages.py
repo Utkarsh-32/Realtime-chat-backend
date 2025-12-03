@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -6,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth_service import get_current_user
 from app.database import get_db
 from app.models import Messages, User
-import logging
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 

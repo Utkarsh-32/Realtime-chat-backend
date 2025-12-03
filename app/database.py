@@ -1,10 +1,10 @@
+import logging
 import os
 from typing import AsyncIterator
 
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
-import logging
 
 load_dotenv()
 

@@ -1,10 +1,10 @@
+import logging
 import os
 from typing import AsyncIterator
 
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 from fastapi import FastAPI
-import logging
 
 load_dotenv()
 

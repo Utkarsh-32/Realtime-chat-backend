@@ -1,6 +1,6 @@
+import logging
 import os
 import uuid
-import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
@@ -10,6 +10,7 @@ router = APIRouter(prefix="/upload", tags=["Upload"])
 
 UPLOAD_DIR = "media"
 logger = logging.getLogger(__name__)
+
 
 @router.post("/image")
 async def upload_image(file: UploadFile = File(...), user=Depends(get_current_user)):

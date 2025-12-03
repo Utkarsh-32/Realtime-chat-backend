@@ -1,7 +1,7 @@
 import asyncio
 import json
-from typing import Any
 import logging
+from typing import Any
 
 from redis.asyncio.client import Redis
 from sqlalchemy import select
@@ -11,6 +11,7 @@ from app.models import GroupMember
 from app.routers.ws import CHAT_CHANNEL, PRESENCE_CHANNEL, READ_CHANNEL, manager
 
 logger = logging.getLogger(__name__)
+
 
 async def handle_pub_messages(msg: dict[str, Any]):
     typ = msg.get("type")

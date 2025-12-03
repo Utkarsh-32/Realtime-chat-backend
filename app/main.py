@@ -5,11 +5,11 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from app.logging_config import setup_logging
 from app.redis_client import close_redis, get_redis, init_redis
 from app.redis_subscriber import start_redis_listener
 from app.routers import auth, groups, messages, uploads, users, ws
 from app.routers.ws import CHAT_CHANNEL, PRESENCE_CHANNEL, READ_CHANNEL
-from app.logging_config import setup_logging
 
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
         await close_redis(app)  # type: ignore
+
 
 logger = logging.getLogger(__name__)
 setup_logging()

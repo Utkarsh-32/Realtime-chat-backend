@@ -1,3 +1,5 @@
+import logging
+
 import jwt
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -5,7 +7,6 @@ from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-import logging
 
 from app.auth_service import (
     ALGORITHM,
@@ -17,7 +18,6 @@ from app.auth_service import (
 )
 from app.database import get_db
 from app.models import User
-
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
