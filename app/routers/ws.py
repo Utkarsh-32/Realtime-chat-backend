@@ -11,8 +11,10 @@ from app.auth_service import ALGORITHM, SECRET_KEY
 from app.database import get_db
 from app.models import GroupMember, GroupMessage, Messages, User
 from app.utils.rate_limit import check_rate_limit
+import logging
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
+logger = logging.getLogger(__name__)
 
 CHAT_CHANNEL = "chat_messages"
 PRESENCE_CHANNEL = "presence"
@@ -165,9 +167,11 @@ async def websocket_chat(websocket: WebSocket):
             await websocket.accept()
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
+        logger.info("WebSocket connection active", extra={"user_id": user_id})
     except (InvalidTokenError, ExpiredSignatureError):
         await websocket.accept()
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        logger.warning("Invalid or Expired token", exc_info=True)
         return
 
     user, _db = await fetch_user_from_db(user_id)
@@ -187,6 +191,7 @@ async def websocket_chat(websocket: WebSocket):
             user.presence_status = "online"  # type: ignore
             db.add(user)
             await db.commit()
+            logger.info("User online", extra={"user_id": user.id})
     finally:
         await gen.aclose()  # type: ignore
 
@@ -210,6 +215,7 @@ async def websocket_chat(websocket: WebSocket):
                 allowed = await check_rate_limit(redis=redis, key=rl_key, limit=20, window_seconds=60)
                 if not allowed:
                     await websocket.send_json({"type": "error", "reason": "rate limit exceeded"})
+                    logger.warning("Rate limit exceeded", extra={"user_id": user_id})
                     continue
 
                 gen = get_db()
@@ -239,7 +245,7 @@ async def websocket_chat(websocket: WebSocket):
                         "image_url": image_url or None,
                     }
                     await redis.publish(CHAT_CHANNEL, json.dumps(forward_payload))
-
+                    logger.info("WS message forwarded", extra={"from": user_id, "to": recipient_id})
                     await db.commit()
                 finally:
                     await gen.aclose()  # type: ignore
@@ -322,6 +328,7 @@ async def websocket_chat(websocket: WebSocket):
                     }
 
                     await redis.publish(f"group:{group_id}", json.dumps(payload))
+                    logger.info("Group message forwarded", extra={"user_id": user_id, "group_id": group_id})
 
                     await websocket.send_json({"type": "ack", "message_id": group_msg.id, "status": "pending"})
                 except Exception:
@@ -387,9 +394,11 @@ async def websocket_chat(websocket: WebSocket):
                 {"type": "presence", "user_id": user_id, "presence_status": "offline", "last_seen_iso": last_seen_iso}
             ),
         )
+        logger.info("User disconnected", extra={"user_id": user_id})
         await manager.disconnect(user_id)
 
     except Exception:
+        logger.error("Websocket error", exc_info=True)
         await manager.disconnect(user_id)
         try:
             await websocket.close()

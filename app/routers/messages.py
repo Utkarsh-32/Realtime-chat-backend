@@ -6,8 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth_service import get_current_user
 from app.database import get_db
 from app.models import Messages, User
+import logging
 
 router = APIRouter(prefix="/messages", tags=["messages"])
+
+logger = logging.getLogger(__name__)
 
 
 class MessageCreate(BaseModel):
@@ -18,11 +21,16 @@ class MessageCreate(BaseModel):
 @router.post("/send")
 async def send_message(data: MessageCreate, author=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if not data.message:
+        logger.warning("Invalid message", exc_info=True)
         raise HTTPException(400, "Invalid Message")
     result = await db.execute(select(User).where(User.id == data.recipient_id))
     recipient = result.scalar_one_or_none()
     if not recipient:
+        logger.warning("Recipient id does not exist", exc_info=True)
         raise HTTPException(400, "Recipient does not exist")
+    if not author:
+        logger.warning("User not authenticated", exc_info=True)
+        raise HTTPException(401, "Not authenticated")
     message_sent = Messages(
         author_id=author.id,
         recipient_id=data.recipient_id,
@@ -31,6 +39,7 @@ async def send_message(data: MessageCreate, author=Depends(get_current_user), db
     db.add(message_sent)
     await db.commit()
     await db.refresh(message_sent)
+    logger.info("Message sent")
     return {
         "author_id": author.id,
         "recipient_id": data.recipient_id,

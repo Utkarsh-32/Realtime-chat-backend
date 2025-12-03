@@ -1,6 +1,7 @@
 import asyncio
 import json
 from typing import Any
+import logging
 
 from redis.asyncio.client import Redis
 from sqlalchemy import select
@@ -9,6 +10,7 @@ from app.database import get_db
 from app.models import GroupMember
 from app.routers.ws import CHAT_CHANNEL, PRESENCE_CHANNEL, READ_CHANNEL, manager
 
+logger = logging.getLogger(__name__)
 
 async def handle_pub_messages(msg: dict[str, Any]):
     typ = msg.get("type")
@@ -77,14 +79,16 @@ async def subscriber_loop(redis: Redis, channels: list[str]):
         try:
             await pubsub.unsubscribe()
             await pubsub.close()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to clean Redis pubsub during shutdown: {e}")
             pass
         raise
     finally:
         try:
             await pubsub.unsubscribe()
             await pubsub.close()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to clean Redis pubsub during shutdown: {e}")
             pass
 
 

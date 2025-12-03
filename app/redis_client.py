@@ -4,9 +4,11 @@ from typing import AsyncIterator
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 from fastapi import FastAPI
+import logging
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
 redis_client: aioredis.Redis | None = None
 
 host = os.getenv("REDIS_HOST", "localhost")
@@ -21,6 +23,7 @@ async def init_redis(app: FastAPI):
     try:
         redis_client.ping()
     except Exception:
+        logger.error("Redis unavailable during startup", exc_info=True)
         raise RuntimeError("Redis is unavailable during startup")
 
     app.state.redis = redis_client
@@ -33,6 +36,7 @@ async def close_redis(app: FastAPI):
             await redis_client.close()
             await redis_client.connection_pool.disconnect()
         except Exception:
+            logger.error("Redis error during shutdown", exc_info=True)
             pass
         redis_client = None
         app.state.redis = None

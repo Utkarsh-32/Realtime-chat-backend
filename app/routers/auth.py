@@ -5,6 +5,7 @@ from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+import logging
 
 from app.auth_service import (
     ALGORITHM,
@@ -17,7 +18,10 @@ from app.auth_service import (
 from app.database import get_db
 from app.models import User
 
+
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+logger = logging.getLogger(__name__)
 
 
 class SignUpRequest(BaseModel):
@@ -38,6 +42,7 @@ async def signup(data: SignUpRequest, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(new_user)
     if new_user.id is not None:
+        logger.info("User created", extra={"user_id": new_user.id})
         return {"Success": "User created"}
     return {"Error": "User not created"}
 
@@ -52,6 +57,7 @@ async def login(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = 
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid password")
     token = create_access_token({"user_id": user.id}, expires_delta=30)
     refresh = create_refresh_token({"user_id": user.id}, expires_delta=7)
+    logger.info("User authenticated and logged in successfully", extra={"user_id": user.id})
     return {"access_token": token, "refresh_token": refresh, "token_type": "bearer"}
 
 

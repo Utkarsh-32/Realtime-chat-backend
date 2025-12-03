@@ -4,12 +4,15 @@ from typing import AsyncIterator
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
+import logging
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
+    logger.error("DATABASE_URL not found", exc_info=True)
     raise ValueError("DATABASE_URL is missing in .env")
 
 engine = create_async_engine(DATABASE_URL, echo=True)
