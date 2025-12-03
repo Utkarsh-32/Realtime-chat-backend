@@ -23,7 +23,7 @@ READ_CHANNEL = "read_receipt"
 
 class ConnectionManager:
     def __init__(self):
-        self.active: Dict[int, WebSocket] = {}
+        self.active: Dict[int, WebSocket] = {}  # type: ignore
 
     async def connect(self, user_id: int, websocket: WebSocket):
         await websocket.accept()

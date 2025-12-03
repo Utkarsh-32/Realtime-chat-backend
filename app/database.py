@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 if TESTING:
     DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 else:
-    DATABASE_URL = os.getenv("DATABASE_URL")
+    DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 if not DATABASE_URL:
     logger.error("DATABASE_URL not found", exc_info=True)
