@@ -155,7 +155,7 @@ async def websocket_chat(websocket: WebSocket):
     redis = websocket.app.state.redis
     token = websocket.headers.get("sec-websocket-protocol")
     await websocket.accept(subprotocol=token)
-    
+
     if not token:
         await websocket.accept()
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
