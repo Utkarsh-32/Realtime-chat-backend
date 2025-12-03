@@ -1,7 +1,12 @@
+import os
+
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+# isort: off
+os.environ["TESTING"] = "1"  # noqa: E402
+# isort: on
 from app.database import Base, get_db
 from app.main import app
 
