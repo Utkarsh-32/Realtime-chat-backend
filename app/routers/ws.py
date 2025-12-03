@@ -153,12 +153,14 @@ async def send_unread_group_messages(user_id: int, websocket: WebSocket):
 @router.websocket("/chat")
 async def websocket_chat(websocket: WebSocket):
     redis = websocket.app.state.redis
-    token = websocket.query_params.get("token")
-
+    token = websocket.headers.get("sec-websocket-protocol")
+    await websocket.accept(subprotocol=token)
+    
     if not token:
         await websocket.accept()
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+    token = token.strip()
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])  # type: ignore
         user_id = payload.get("user_id")
