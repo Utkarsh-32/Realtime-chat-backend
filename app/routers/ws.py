@@ -26,7 +26,6 @@ class ConnectionManager:
         self.active: Dict[int, WebSocket] = {}  # type: ignore
 
     async def connect(self, user_id: int, websocket: WebSocket):
-        await websocket.accept()
         redis = websocket.app.state.redis
         self.active[user_id] = websocket
         payload = {
