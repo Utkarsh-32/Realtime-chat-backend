@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pydantic import BaseModel
+
 from app.auth_service import get_current_user
 from app.database import get_db
 from app.models import Group, GroupMember, User
@@ -11,6 +13,13 @@ from app.models import Group, GroupMember, User
 router = APIRouter(prefix="/groups", tags=["groups"])
 
 logger = logging.getLogger(__name__)
+
+class GroupOut(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        orm_mode = True
 
 
 @router.post("/create-group")
@@ -54,3 +63,9 @@ async def add_member(group_id: int, user_id: int, db: AsyncSession = Depends(get
     await db.refresh(group_member)
     logger.info("User added to the group", extra={"user_id": user.id, "group_id": group.id})
     return {"Success": "User added to the group"}
+
+@router.get("/all", response_model=list[GroupOut])
+async def get_groups(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Group))
+    groups = result.scalars().all()
+    return groups

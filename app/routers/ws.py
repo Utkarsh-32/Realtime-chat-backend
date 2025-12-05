@@ -12,6 +12,7 @@ from app.auth_service import ALGORITHM, SECRET_KEY
 from app.database import get_db
 from app.models import GroupMember, GroupMessage, Messages, User
 from app.utils.rate_limit import check_rate_limit
+from app.routers.users import get_username
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
 logger = logging.getLogger(__name__)
@@ -25,13 +26,14 @@ class ConnectionManager:
     def __init__(self):
         self.active: Dict[int, WebSocket] = {}  # type: ignore
 
-    async def connect(self, user_id: int, websocket: WebSocket):
+    async def connect(self, user_id: int, websocket: WebSocket, username):
         redis = websocket.app.state.redis
         self.active[user_id] = websocket
         payload = {
             "type": "presence",
             "user_id": user_id,
             "presence_status": "online",
+            "username": username
         }
         await redis.publish(PRESENCE_CHANNEL, json.dumps(payload))
 
@@ -88,11 +90,14 @@ async def send_pending_messages(user_id: int):
             select(Messages).where(Messages.recipient_id == user_id, Messages.status == "pending")
         )
         pending = result.scalars().all()
+
         for msg in pending:
+            author_name = await get_username(msg.author_id, db) # type: ignore
             payload = {
                 "type": "message",
                 "message_id": msg.id,
                 "author_id": msg.author_id,
+                "author_name": author_name,
                 "recipient_id": msg.recipient_id,
                 "message": msg.message,
                 "timestamp": msg.timestamp.isoformat(),
@@ -126,12 +131,14 @@ async def send_unread_group_messages(user_id: int, websocket: WebSocket):
             if not unread_msgs:
                 continue
             for msg in unread_msgs:
+                author_name = await get_username(msg.author_id, db) #type: ignore
                 await websocket.send_json(
                     {
                         "type": "group_message",
                         "group_id": grp_id,
                         "message_id": msg.id,
                         "author_id": msg.author_id,
+                        "author_name": author_name,
                         "message": msg.message,
                         "timestamp": msg.timestamp.isoformat(),
                         "status": "delivered",
@@ -175,14 +182,7 @@ async def websocket_chat(websocket: WebSocket):
         return
     await websocket.accept(subprotocol=token)
     logger.info(f"websocket connected for user: {user_id}")
-
-    user, _db = await fetch_user_from_db(user_id)
-    if not user:
-        await websocket.accept()
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
-    await manager.connect(user_id, websocket)
+    
 
     gen = get_db()
     try:
@@ -194,6 +194,8 @@ async def websocket_chat(websocket: WebSocket):
             db.add(user)
             await db.commit()
             logger.info("User online", extra={"user_id": user.id})
+        username = await get_username(user_id, db)
+        await manager.connect(user_id, websocket, username)
     finally:
         await gen.aclose()  # type: ignore
 
@@ -236,11 +238,15 @@ async def websocket_chat(websocket: WebSocket):
                     message_id = msg.id
 
                     is_online = manager.is_online(recipient_id)
+                    author_name = await get_username(user_id, db)
+                    recipient_name = await get_username(recipient_id, db)
                     forward_payload = {
                         "type": "message",
                         "message_id": msg.id,
                         "author_id": user_id,
+                        "author_name": author_name,
                         "recipient_id": recipient_id,
+                        "recipient_name": recipient_name,
                         "message": text or None,
                         "timestamp": msg.timestamp.isoformat(),
                         "status": "delivered" if is_online else "pending",
@@ -271,6 +277,7 @@ async def websocket_chat(websocket: WebSocket):
                         await db.commit()
                         author_id = m.author_id
                         try:
+                            reader_name = await get_username(user_id, db) #type: ignore
                             await redis.publish(
                                 READ_CHANNEL,
                                 json.dumps(
@@ -279,6 +286,7 @@ async def websocket_chat(websocket: WebSocket):
                                         "message_id": m.id,
                                         "reader_id": user_id,
                                         "author_id": author_id,
+                                        "reader_name": reader_name
                                     }
                                 ),
                             )
@@ -317,11 +325,12 @@ async def websocket_chat(websocket: WebSocket):
                     await db.commit()
                     await db.refresh(group_msg)
                     group_msg_id = group_msg.id
-
+                    author_name = await get_username(author_id, db)
                     payload = {
                         "type": "group_message",
                         "group_id": group_id,
                         "author_id": author_id,
+                        "author_name": author_name,
                         "message_id": group_msg_id,
                         "message": text or None,
                         "timestamp": group_msg.timestamp.isoformat(),
@@ -390,10 +399,11 @@ async def websocket_chat(websocket: WebSocket):
         finally:
             await gen.aclose()  # type: ignore
 
+        username = await get_username(user_id, db)
         await redis.publish(
             PRESENCE_CHANNEL,
             json.dumps(
-                {"type": "presence", "user_id": user_id, "presence_status": "offline", "last_seen_iso": last_seen_iso}
+                {"type": "presence", "user_id": user_id, "username": username,"presence_status": "offline", "last_seen_iso": last_seen_iso}
             ),
         )
         logger.info("User disconnected", extra={"user_id": user_id})
