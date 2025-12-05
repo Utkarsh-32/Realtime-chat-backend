@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.auth_service import get_current_user
 from app.database import get_db
@@ -74,7 +75,13 @@ async def get_groups(db: AsyncSession = Depends(get_db)):
 @router.get("/{group_id}/messages")
 async def get_group_messages(group_id: int, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
     result = await db.execute(
-        select(GroupMessage).where(GroupMessage.group_id == group_id).order_by(GroupMessage.id.asc())
+        select(GroupMessage)
+        .options(
+            selectinload(GroupMessage.author),
+            selectinload(GroupMessage.group),
+        )
+        .where(GroupMessage.group_id == group_id)
+        .order_by(GroupMessage.id.asc())
     )
     grp_msgs = result.scalars().all()
     output = []

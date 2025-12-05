@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.auth_service import get_current_user
 from app.database import get_db
@@ -72,6 +73,10 @@ async def get_direct_messages(recipient_id: int, user=Depends(get_current_user),
     me_id = user.id
     result = await db.execute(
         select(Messages)
+        .options(
+            selectinload(Messages.author),
+            selectinload(Messages.recipient),
+        )
         .where(
             or_(
                 and_(Messages.author_id == me_id, Messages.recipient_id == recipient_id),
