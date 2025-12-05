@@ -59,3 +59,6 @@ class GroupMessage(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     status = Column(String(20), default="pending")
     image_url = Column(String, nullable=True)
+
+    author = relationship("User", foreign_keys=[author_id])
+    group = relationship("Group", foreign_keys=[group_id])

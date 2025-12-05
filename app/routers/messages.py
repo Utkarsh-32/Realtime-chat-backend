@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth_service import get_current_user
@@ -65,3 +65,36 @@ async def sent_messages(user=Depends(get_current_user), db: AsyncSession = Depen
     if not message:
         return []
     return message
+
+
+@router.get("/{recipient_id}")
+async def get_direct_messages(recipient_id: int, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    me_id = user.id
+    result = await db.execute(
+        select(Messages)
+        .where(
+            or_(
+                and_(Messages.author_id == me_id, Messages.recipient_id == recipient_id),
+                and_(Messages.author_id == recipient_id, Messages.recipient_id == me_id),
+            )
+        )
+        .order_by(Messages.id.asc())
+    )
+
+    msgs = result.scalars().all()
+    output = []
+    for m in msgs:
+        output.append(
+            {
+                "message_id": m.id,
+                "author_id": m.author_id,
+                "recipient_id": m.recipient_id,
+                "author_name": m.author.username,
+                "recipient_name": m.recipient.username,
+                "message": m.message,
+                "image_url": m.image_url,
+                "timestamp": m.timestamp.isoformat(),
+                "status": m.status,
+            }
+        )
+    return output

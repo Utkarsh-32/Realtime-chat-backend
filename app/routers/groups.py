@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth_service import get_current_user
 from app.database import get_db
-from app.models import Group, GroupMember, User
+from app.models import Group, GroupMember, GroupMessage, User
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
@@ -69,3 +69,27 @@ async def get_groups(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Group))
     groups = result.scalars().all()
     return groups
+
+
+@router.get("/{group_id}/messages")
+async def get_group_messages(group_id: int, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+    result = await db.execute(
+        select(GroupMessage).where(GroupMessage.group_id == group_id).order_by(GroupMessage.id.asc())
+    )
+    grp_msgs = result.scalars().all()
+    output = []
+
+    for m in grp_msgs:
+        output.append(
+            {
+                "group_id": m.group_id,
+                "group_name": m.group.name,
+                "author_id": m.author_id,
+                "author_name": m.author.username,
+                "message": m.message,
+                "image_url": m.image_url,
+                "timestamp": m.timestamp.isoformat(),
+            }
+        )
+
+    return output
