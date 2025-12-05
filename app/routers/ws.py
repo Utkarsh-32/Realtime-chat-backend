@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from app.auth_service import ALGORITHM, SECRET_KEY
 from app.database import get_db
-from app.models import GroupMember, GroupMessage, Messages, User
+from app.models import GroupMember, GroupMessage, Messages, User, Group
 from app.utils.rate_limit import check_rate_limit
 from app.utils.user import get_username
 
@@ -246,6 +246,7 @@ async def websocket_chat(websocket: WebSocket):
                         "status": "delivered" if is_online else "pending",
                         "image_url": image_url or None,
                     }
+                    await websocket.send_json(forward_payload)
                     await redis.publish(CHAT_CHANNEL, json.dumps(forward_payload))
                     logger.info("WS message forwarded", extra={"from": user_id, "to": recipient_id})
                     await db.commit()
@@ -320,9 +321,12 @@ async def websocket_chat(websocket: WebSocket):
                     await db.refresh(group_msg)
                     group_msg_id = group_msg.id
                     author_name = await get_username(author_id, db)
+                    result = await db.execute(select(Group.name).where(Group.id==group_id))
+                    group_name = result.scalar_one_or_none()
                     payload = {
                         "type": "group_message",
                         "group_id": group_id,
+                        "group_name": group_name,
                         "author_id": author_id,
                         "author_name": author_name,
                         "message_id": group_msg_id,
@@ -331,7 +335,7 @@ async def websocket_chat(websocket: WebSocket):
                         "status": "pending",
                         "image_url": image_url or None,
                     }
-
+                    await websocket.send_json(payload)
                     await redis.publish(f"group:{group_id}", json.dumps(payload))
                     logger.info("Group message forwarded", extra={"user_id": user_id, "group_id": group_id})
 
