@@ -12,7 +12,7 @@ from app.auth_service import ALGORITHM, SECRET_KEY
 from app.database import get_db
 from app.models import GroupMember, GroupMessage, Messages, User
 from app.utils.rate_limit import check_rate_limit
-from app.routers.users import get_username
+from app.utils.user import get_username
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
 logger = logging.getLogger(__name__)
@@ -29,12 +29,7 @@ class ConnectionManager:
     async def connect(self, user_id: int, websocket: WebSocket, username):
         redis = websocket.app.state.redis
         self.active[user_id] = websocket
-        payload = {
-            "type": "presence",
-            "user_id": user_id,
-            "presence_status": "online",
-            "username": username
-        }
+        payload = {"type": "presence", "user_id": user_id, "presence_status": "online", "username": username}
         await redis.publish(PRESENCE_CHANNEL, json.dumps(payload))
 
     async def disconnect(self, user_id: int):
@@ -92,7 +87,7 @@ async def send_pending_messages(user_id: int):
         pending = result.scalars().all()
 
         for msg in pending:
-            author_name = await get_username(msg.author_id, db) # type: ignore
+            author_name = await get_username(msg.author_id, db)  # type: ignore
             payload = {
                 "type": "message",
                 "message_id": msg.id,
@@ -131,7 +126,7 @@ async def send_unread_group_messages(user_id: int, websocket: WebSocket):
             if not unread_msgs:
                 continue
             for msg in unread_msgs:
-                author_name = await get_username(msg.author_id, db) #type: ignore
+                author_name = await get_username(msg.author_id, db)  # type: ignore
                 await websocket.send_json(
                     {
                         "type": "group_message",
@@ -182,7 +177,6 @@ async def websocket_chat(websocket: WebSocket):
         return
     await websocket.accept(subprotocol=token)
     logger.info(f"websocket connected for user: {user_id}")
-    
 
     gen = get_db()
     try:
@@ -277,7 +271,7 @@ async def websocket_chat(websocket: WebSocket):
                         await db.commit()
                         author_id = m.author_id
                         try:
-                            reader_name = await get_username(user_id, db) #type: ignore
+                            reader_name = await get_username(user_id, db)  # type: ignore
                             await redis.publish(
                                 READ_CHANNEL,
                                 json.dumps(
@@ -286,7 +280,7 @@ async def websocket_chat(websocket: WebSocket):
                                         "message_id": m.id,
                                         "reader_id": user_id,
                                         "author_id": author_id,
-                                        "reader_name": reader_name
+                                        "reader_name": reader_name,
                                     }
                                 ),
                             )
@@ -403,7 +397,13 @@ async def websocket_chat(websocket: WebSocket):
         await redis.publish(
             PRESENCE_CHANNEL,
             json.dumps(
-                {"type": "presence", "user_id": user_id, "username": username,"presence_status": "offline", "last_seen_iso": last_seen_iso}
+                {
+                    "type": "presence",
+                    "user_id": user_id,
+                    "username": username,
+                    "presence_status": "offline",
+                    "last_seen_iso": last_seen_iso,
+                }
             ),
         )
         logger.info("User disconnected", extra={"user_id": user_id})

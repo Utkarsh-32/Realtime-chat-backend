@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from pydantic import BaseModel
 
 from app.auth_service import get_current_user
 from app.database import get_db
@@ -11,12 +10,12 @@ from app.routers.ws import manager
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
+
 class UserList(BaseModel):
     id: int
     username: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/me")
@@ -38,12 +37,9 @@ async def presence(user_id: int, db: AsyncSession = Depends(get_db)):
 async def online():
     return {"online": list(manager.active.keys())}
 
+
 @router.get("/all", response_model=list[UserList])
 async def get_all_users(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User))
     users = result.scalars().all()
     return users
-
-async def get_username(user_id: int, db: AsyncSession) -> str | None:
-    result = await db.execute(select(User.username).where(User.id == user_id))
-    return result.scalar_one_or_none()
