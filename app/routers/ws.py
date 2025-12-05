@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from app.auth_service import ALGORITHM, SECRET_KEY
 from app.database import get_db
-from app.models import GroupMember, GroupMessage, Messages, User, Group
+from app.models import Group, GroupMember, GroupMessage, Messages, User
 from app.utils.rate_limit import check_rate_limit
 from app.utils.user import get_username
 
@@ -321,7 +321,7 @@ async def websocket_chat(websocket: WebSocket):
                     await db.refresh(group_msg)
                     group_msg_id = group_msg.id
                     author_name = await get_username(author_id, db)
-                    result = await db.execute(select(Group.name).where(Group.id==group_id))
+                    result = await db.execute(select(Group.name).where(Group.id == group_id))
                     group_name = result.scalar_one_or_none()
                     payload = {
                         "type": "group_message",
