@@ -1,9 +1,9 @@
 # Realtime Chat Backend (FastAPI + WebSockets + Redis)
-*A fully asynchronous realtime chat backend built with FastAPI, WebSockets, Redis Pub/Sub, and PostgreSQL*
-*designed to behave like a miniature production messaging system.*
+A fully asynchronous realtime chat backend built with FastAPI, WebSockets, Redis Pub/Sub, and PostgreSQL
+designed to behave like a miniature production messaging system.
 
-*Includes authentication, presence-tracking, group chats, image uploads, rate-limiting, and offline*
-*message delivery*
+Includes authentication, presence-tracking, group chats, image uploads, rate-limiting, and offline*
+*message delivery
 
 **Backend URL: 👉 [Realtime Chat Backend](https://realtime-chat-backend-ds2b.onrender.com)**
 
@@ -32,15 +32,16 @@
 **Layer** | **Tech**
 --------- | --------
 Backend | FastAPI, WebSockets, SQLAlchemy, Alembic
-
+--------- | --------
 Database | PostgreSQL
-
+--------- | --------
 Cache/Realtime | Redis (Pub/Sub)
-
+--------- | --------
 Auth | JWT (PyJWT)
-
+--------- | --------
 Deployment | Docker, Render
 
+---
 
 ## 🏗️ Architecture Overview
 The system uses:
@@ -64,6 +65,7 @@ Client -> WS -> group_message -> Redis("group:<id>")
 -> Subscriber -> Fetch group members -> Fan-out to 
 all online members -> Stored in DB for offline users
 
+---
 
 ## 🏞️ Image Uploads
 **Upload endpoint:**
@@ -84,6 +86,7 @@ all online members -> Stored in DB for offline users
 - image_url
 - or both
 
+---
 
 ## 👬 Group chat support
 **Endpoints include:**
@@ -93,6 +96,7 @@ all online members -> Stored in DB for offline users
     GET /groups/all
     GET /groups/{group_id}/messages
 ```
+
 **WebSocket Message Format:**
 ```json
     {
@@ -107,6 +111,7 @@ all online members -> Stored in DB for offline users
 - Sends them to user at login
 - Updates GroupMember.last_read_message_id automatically
 
+---
 
 ## 🔒 Rate Limiting
 **Redis-based per-user limits:**
@@ -128,10 +133,13 @@ all online members -> Stored in DB for offline users
 - type: "read_receipt"
 ```
 
+---
+
 ## 🚞 Deployment
 - **Backend**: Render(Docker)
 - **URL**: [Realtime Chat Backend](https://realtime-chat-backend-ds2b.onrender.com)
 
+---
 
 **🧹 Code Quality & CI**
 - flake8 for linting and style checks
