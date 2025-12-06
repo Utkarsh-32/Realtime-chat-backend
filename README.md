@@ -30,15 +30,11 @@ Includes authentication, presence-tracking, group chats, image uploads, rate-lim
 ## 🧰 Tech Stack
 
 **Layer** | **Tech**
---------- | --------
+--- | ---
 Backend | FastAPI, WebSockets, SQLAlchemy, Alembic
---------- | --------
 Database | PostgreSQL
---------- | --------
 Cache/Realtime | Redis (Pub/Sub)
---------- | --------
 Auth | JWT (PyJWT)
---------- | --------
 Deployment | Docker, Render
 
 ---
